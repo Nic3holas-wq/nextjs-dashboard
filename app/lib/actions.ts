@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import postgres from 'postgres';
 import { redirect } from 'next/navigation';
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
-
+// Define the schema for form validation using Zod
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string({
@@ -21,7 +23,7 @@ const FormSchema = z.object({
 });
  
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
-
+// Define the shape of the state used in forms
 export type State = {
   errors?: {
     customerId?: string[];
@@ -31,6 +33,7 @@ export type State = {
   message?: string | null;
 };
  
+// Server action to handle invoice creation
 export async function createInvoice(prevState: State, formData: FormData) {
   // Validate form using Zod
   const validatedFields = CreateInvoice.safeParse({
@@ -75,6 +78,7 @@ const UpdateInvoice = FormSchema.omit({ id: true, date: true });
  
 // ...
  
+// Server action to handle invoice updates
 export async function updateInvoice(id: string, prevState: State, formData: FormData) {
    // Validate form using Zod
   const validatedFields = CreateInvoice.safeParse({
@@ -118,4 +122,24 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
 export async function deleteInvoice(id: string) {
   await sql`DELETE FROM invoices WHERE id = ${id}`;
   revalidatePath('/dashboard/invoices');
+}
+
+// Server action to handle user authentication
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials.';
+        default:
+          return 'Something went wrong.';
+      }
+    }
+    throw error;
+  }
 }
